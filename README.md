@@ -55,25 +55,37 @@ Every user interaction follows this cycle. If any transition **breaks or stalls*
 ## How It Works
 
 ```
-
-┌─────────────┐ ┌──────────────────┐ ┌─────────────────┐
-│ Mobile App │────▶│ Instrumentation │────▶│ AI QA Agent │
-│ │ │ Layer (timing) │ │ │
-│ (any app) │◀────│ events + ms ts │ │ Oracle rules │
-│ │ └──────────────────┘ │ Verdicts │
-└─────────────┘ │ Evidence │
-│ Scoring │
-└────────┬────────┘
-│
-▼
-┌─────────────────┐
-│ UX Report │
-│ Score: 78/100 │
-│ Critical: 2 │
-│ Major: 5 │
-└─────────────────┘
-
+┌──────────────┐      ┌────────────────────┐      ┌──────────────────┐
+│              │      │                    │      │                  │
+│  Mobile App  │─────▶│  Instrumentation   │─────▶│  AI QA Agent     │
+│  (any app)   │      │  Layer             │      │                  │
+│              │◀─────│  · events          │      │  · Oracle rules  │
+│              │      │  · ms timestamps   │      │  · Verdicts      │
+│              │      │  · frame data      │      │  · Evidence      │
+│              │      │                    │      │  · Scoring       │
+└──────────────┘      └────────────────────┘      └────────┬─────────┘
+                                                           │
+                                                           ▼
+                                                  ┌──────────────────┐
+                                                  │  UX Report       │
+                                                  │                  │
+                                                  │  Score : 78/100  │
+                                                  │  Critical : 2    │
+                                                  │  Major    : 5    │
+                                                  │  Warning  : 12   │
+                                                  └──────────────────┘
 ```
+
+**Mobile App** → **Instrumentation Layer** → **AI QA Agent** → **UX Report**
+
+1. The **Instrumentation Layer** hooks into the app and emits timestamped events
+   (DOM mutations, input events, frame timings, network logs, etc.)
+
+2. The **AI QA Agent** receives these signals, autonomously explores the app,
+   and evaluates every interaction against 13 universal oracle rules.
+
+3. A **UX Report** is generated with per-action scores, severity classifications,
+   evidence bundles, and Human Impact Statements.
 
 ## Scoring
 
