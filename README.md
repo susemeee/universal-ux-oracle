@@ -127,7 +127,7 @@ Week 5+: + Accessibility, Gesture, Platform Convention, ...
 
 ## Documentation
 
-See [`UX_ORACLE_SPEC.md`](./UX_ORACLE_SPEC.md) for the full specification including:
+See [`universal_ux_oracle_mobile.md`](./universal_ux_oracle_mobile.md) for the full specification including:
 
 - Detailed oracle rules with thresholds and pseudocode
 - Evidence collection requirements
