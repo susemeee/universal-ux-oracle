@@ -75,6 +75,402 @@ Intent → Input → ACK → Progress → DONE
 | DONE 후 상태 불일치  | "뭐가 바뀐 거야?"    | Result Clarity Fail     |
 | 어떤 전환도 없음     | "앱이 죽었나?"       | Frozen UI Fail          |
 
+# 2-A. Task-Oriented Testing Philosophy
+
+## Why "Task", Not "Feature"
+
+Traditional QA decomposes an app into **features** and tests each in isolation:
+
+- ✅ Login works → done
+- ✅ Button renders → done
+- ✅ API returns 200 → done
+
+But real humans don't use features in isolation. They pursue **end-to-end
+goals**:
+
+> "I want to create a polished document and download it as PDF."
+
+This goal spans multiple features: prompt input → AI generation → GUI
+editing → formatting → export. Testing only the prompt submission
+(a single feature) tells you nothing about whether the **overall
+experience** works.
+
+### The Problem with Feature-Unit Testing
+
+| Anti-pattern           | Example                                     | Why it fails                                                        |
+| ---------------------- | ------------------------------------------- | ------------------------------------------------------------------- |
+| Login-and-stop         | Test logs in successfully, ends             | User logged in to _do_ something — the journey isn't over           |
+| Single-prompt-and-stop | Send one prompt to an AI tool, check output | Real users iterate: edit, regenerate, refine, combine               |
+| Button-click-and-stop  | Click "Create", verify modal opens          | User needs to fill the modal, submit, see result, and continue      |
+| API-response-only      | Verify server returns data                  | Doesn't tell you if the user can actually _use_ that data in the UI |
+
+### The Task-Oriented Alternative
+
+A **task** is a sequence of actions that fulfills a **user's real-world
+goal**, crossing multiple features and interaction modes.
+
+```
+Task = Goal → [Action₁ → Action₂ → ... → Actionₙ] → Outcome
+```
+
+The AI QA agent must always think in terms of tasks:
+
+```
+❌ Feature thinking:  "Can the user type a prompt?"
+✅ Task thinking:     "Can the user create a finished document
+                       by prompting, editing, formatting, and exporting?"
+```
+
+## Task Structure
+
+### Anatomy of a Task
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  TASK: "Create a polished sales report"                 │
+│                                                         │
+│  Phase 1: Initiation                                    │
+│    → Open document editor                               │
+│    → Type prompt describing desired content              │
+│    → Submit prompt                                      │
+│                                                         │
+│  Phase 2: AI Generation                                 │
+│    → Wait for AI to generate draft                      │
+│    → Review generated content                           │
+│                                                         │
+│  Phase 3: Manual Refinement                             │
+│    → Edit text directly in GUI editor                   │
+│    → Adjust formatting (headings, bold, lists)          │
+│    → Rearrange sections via drag-and-drop               │
+│    → Insert additional prompts for specific sections    │
+│                                                         │
+│  Phase 4: Finalization                                  │
+│    → Preview final document                             │
+│    → Export as PDF/DOCX                                 │
+│    → Verify downloaded file opens correctly             │
+│                                                         │
+│  ✅ Task complete when: user has a usable document      │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Task Properties
+
+| Property          | Description                                                        |
+| ----------------- | ------------------------------------------------------------------ |
+| **Goal-directed** | Every task has a clear end-state the user wants to reach           |
+| **Multi-phase**   | Spans initiation → processing → refinement → completion            |
+| **Multi-modal**   | May combine AI prompts, GUI interactions, keyboard input, gestures |
+| **Cross-feature** | Touches navigation, forms, editors, file I/O, etc.                 |
+| **Interruptible** | Users may pause, switch tabs, return — state must survive          |
+| **Iterative**     | Users repeat sub-steps (re-prompt, re-edit) until satisfied        |
+
+## Task Categories
+
+### By Interaction Pattern
+
+| Category        | Description                               | Example                                                      |
+| --------------- | ----------------------------------------- | ------------------------------------------------------------ |
+| **AI-then-GUI** | Start with AI generation, refine manually | Prompt → draft → GUI editing → export                        |
+| **GUI-then-AI** | Start manually, use AI to enhance         | Write outline → AI expand sections → review                  |
+| **Interleaved** | Alternate between AI and manual           | Write intro → AI generates body → manual edit → AI reformats |
+| **Pure GUI**    | No AI involved, traditional interaction   | Browse settings → change preferences → save                  |
+| **Pure AI**     | Fully AI-driven, user only reviews        | One prompt → full output → accept/reject                     |
+
+### By Complexity
+
+| Level    | Phases    | Example                                                                 |
+| -------- | --------- | ----------------------------------------------------------------------- |
+| Simple   | 2–3 steps | Search → view result                                                    |
+| Moderate | 4–7 steps | Create document → edit → format → export                                |
+| Complex  | 8+ steps  | Plan project → create multiple docs → cross-reference → share with team |
+
+## Oracle Application at Task Level
+
+All 13 oracles still apply, but they are evaluated **within the context
+of the full task**, not individual feature interactions.
+
+### Task-Aware Oracle Enhancements
+
+| Oracle              | Feature-level (old)               | Task-level (new)                                                                          |
+| ------------------- | --------------------------------- | ----------------------------------------------------------------------------------------- |
+| ACK                 | "Button responded in 200ms ✅"    | "Button responded, but did it advance the user toward their goal?"                        |
+| Extra-Action        | "One tap to submit ✅"            | "Does completing the _whole task_ require unnecessary extra steps?"                       |
+| Focus/Routing       | "Focus is on the right input ✅"  | "After AI generates content, does focus land where the user needs to _continue editing_?" |
+| Navigation          | "Back goes to previous screen ✅" | "Can the user navigate freely between task phases without losing progress?"               |
+| Async Transparency  | "Spinner shows during load ✅"    | "During multi-step AI processing, does the user know which _phase_ they're in?"           |
+| Content Consistency | "Data displays correctly ✅"      | "Is the user's work preserved across all phases — prompt → generation → edit → export?"   |
+| Error Feedback      | "Error toast shown ✅"            | "If export fails after 10 minutes of editing, can the user recover without data loss?"    |
+
+### Task Continuity Checks (New)
+
+| Check                          | Description                                                   | Fail condition                                             |
+| ------------------------------ | ------------------------------------------------------------- | ---------------------------------------------------------- |
+| **State preservation**         | User's work survives phase transitions                        | Edit lost when switching from editor to preview            |
+| **Progress persistence**       | Partial work is saved automatically or with clear save points | App crash = all work gone                                  |
+| **Mode transition smoothness** | Switching between AI input and GUI editing is seamless        | Must reload page to switch from prompt to editor           |
+| **Context carry-over**         | AI understands what the user did manually, and vice versa     | AI overwrites manual edits; GUI doesn't reflect AI changes |
+| **Goal reachability**          | The end goal is actually achievable through the UI            | Export button is hidden, disabled, or broken after editing |
+
+## Exploration Strategy Update
+
+### Task-Oriented Exploration (replaces pure screen-walking)
+
+```
+Phase 1: Goal Discovery
+  → Identify primary tasks the app supports
+  → Map: what is the "done" state for each task?
+
+Phase 2: Happy-Path Task Execution
+  → Execute each task end-to-end as a cooperative user would
+  → Record all oracle verdicts across the full journey
+  → Flag any point where the task gets "stuck"
+
+Phase 3: Variation Testing
+  → Re-execute tasks with variations:
+    · Different input methods (prompt vs. GUI vs. mixed)
+    · Interruptions (switch app mid-task, rotate device)
+    · Error injection (network drop during AI generation)
+    · Undo/redo cycles within task
+    · Skipping optional steps
+
+Phase 4: Cross-Task Interference
+  → Start Task A, switch to Task B, return to Task A
+  → Verify state isolation or graceful multi-task support
+
+Phase 5: Edge-Case Tasks
+  → Extremely long tasks (100+ edits)
+  → Rapid task switching
+  → Tasks with large data (huge documents, many images)
+```
+
+### Task Coverage Metric
+
+```
+Task Coverage = (completed_tasks / identified_tasks) × 100%
+
+Where "completed" means:
+  - All phases executed
+  - Goal state reached (or failure clearly reported)
+  - All oracle verdicts collected across full journey
+```
+
+### Task-Level Scoring
+
+```
+Task Score = weighted_avg(phase_scores)
+
+Where:
+  phase_score = avg(action_scores within phase)
+
+  Weights:
+    Initiation phase:   × 1.0
+    Processing phase:   × 1.2  (user is committed, failure costs more)
+    Refinement phase:   × 1.5  (most time invested, highest loss on failure)
+    Finalization phase:  × 2.0  (goal completion — failure here is devastating)
+```
+
+## Anti-Pattern Detection
+
+The AI agent should flag when it detects **feature-unit testing traps**:
+
+| Signal                     | Detection                                                              | Action                                               |
+| -------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------- |
+| Dead-end screen            | Agent reaches a screen with no forward path toward a goal              | Flag as potential task-blocker                       |
+| Orphan feature             | Feature exists but doesn't connect to any identifiable task            | Report as architectural concern                      |
+| Single-action satisfaction | Agent could mark "pass" after one action                               | Force continuation: "What would the user do _next_?" |
+| Missing final mile         | Task is 90% achievable but the last step (save/export/share) is broken | Escalate as Critical — maximum user frustration      |
+
+## Examples
+
+### ❌ Bad: Feature-Unit Test
+
+```
+Test: "AI Document Generation"
+1. Open app                    ✅
+2. Navigate to document tool   ✅
+3. Type prompt: "Write a memo" ✅
+4. Click Submit                ✅
+5. Verify: AI response appears ✅
+→ Result: PASS
+
+Reality: User still can't create a usable document.
+The generated text has no formatting, the editor is buggy,
+and the export button throws a silent error.
+```
+
+### ✅ Good: Task-Oriented Test
+
+```
+Task: "Create and export a business memo"
+
+Phase 1 — Initiation
+  1. Open app → Navigate to document tool     ✅ ACK: 180ms
+  2. Type prompt: "Write a project status memo
+     for Q4, include timeline and risks"      ✅ Focus: correct field
+  3. Submit prompt                            ✅ ACK: 120ms
+
+Phase 2 — AI Generation
+  4. Wait for AI draft                        ✅ Async: spinner at 800ms
+  5. Draft appears                            ✅ 2.1s total, content visible
+
+Phase 3 — Refinement
+  6. Click on "Risks" section to edit         ⚠️ Focus: jumped to top of doc
+  7. Type additional risk item                ✅ Input routed correctly
+  8. Bold the section header via toolbar      ✅ ACK: 90ms
+  9. Drag "Timeline" section above "Risks"    ❌ Gesture: dropped, section lost
+  10. Undo                                    ✅ Section restored
+  11. Re-prompt: "Add a budget summary"       ✅ Context preserved
+
+Phase 4 — Finalization
+  12. Click Preview                           ✅ Navigation: smooth
+  13. Click "Export as PDF"                    ❌ Silent failure (Error Oracle)
+  14. No feedback for 5 seconds               ❌ Async Transparency: violated
+  15. Retry → PDF downloads                   ✅ but required extra action
+
+Task Score: 64/100 (🟡 Degraded)
+Critical issues: Gesture failure (step 9), Silent export error (step 13)
+Human Impact: "I spent 10 minutes editing a document and almost lost
+my work. The export seemed broken — I didn't know if my file was saved."
+```
+
+---
+
+````
+
+---
+
+# 3. 기존 가이드라인 업데이트용 프롬프트
+
+아래는 **기존 UX Oracle Spec 문서를 task-oriented 관점으로 업데이트**할 때 AI에게 줄 수 있는 프롬프트입니다.
+
+```markdown
+# Prompt: Update UX Oracle Spec with Task-Oriented Testing Philosophy
+
+You are updating an existing "Universal UX Oracle Specification" document.
+The current version evaluates UX quality at the **individual action level**
+(tap, swipe, type). This is necessary but insufficient.
+
+## Core Update Requirement
+
+Add a **Task-Oriented Testing** layer on top of the existing action-level
+oracles. The key insight is:
+
+> **Human UX testing must be scoped to TASKS (end-to-end goals),
+> not FEATURES (isolated functions).**
+
+## Definitions
+
+- **Feature**: A single capability (e.g., login, text input, button click)
+- **Task**: A goal-directed sequence of actions spanning multiple features
+  that produces a meaningful outcome for the user
+  (e.g., "create a document, edit it, and export as PDF")
+
+## What to update
+
+### 1. Philosophy Section
+- Add a new subsection explaining why task-oriented testing is superior
+  to feature-unit testing
+- Include anti-patterns:
+  · "Login-and-stop" — testing login in isolation
+  · "Single-prompt-and-stop" — sending one AI prompt and calling it done
+  · "Button-click-and-stop" — verifying a click without following through
+- Emphasize: always think about the system's ULTIMATE GOAL from the
+  user's perspective
+
+### 2. Interaction Model
+- Extend the existing `Intent → Input → ACK → Progress → DONE` model
+  to support multi-phase tasks:
+````
+
+Task = [Phase₁ → Phase₂ → ... → Phaseₙ] → Goal Achieved
+Phase = [Action₁ → Action₂ → ... → Actionₘ] → Phase Outcome
+Action = Intent → Input → ACK → Progress → DONE
+
+```
+- A task is only "done" when the user's real-world goal is met
+
+### 3. Oracle Enhancements
+- For EACH existing oracle (ACK, Extra-Action, Focus, Navigation,
+Async, Gesture, Visual Stability, Error, Accessibility, Content,
+Platform, Performance), add a "Task-level interpretation" that
+explains how the oracle applies across the full task journey,
+not just a single action
+- Add new "Task Continuity" checks:
+· State preservation across phases
+· Progress persistence (auto-save, crash recovery)
+· Mode transition smoothness (AI ↔ GUI switching)
+· Context carry-over (AI and manual edits don't conflict)
+· Goal reachability (the final step actually works)
+
+### 4. Exploration Strategy
+- Update the exploration strategy to be task-first:
+· Phase 1: Discover what tasks the app supports
+· Phase 2: Execute each task end-to-end (happy path)
+· Phase 3: Execute with variations (different input modes,
+  interruptions, errors)
+· Phase 4: Cross-task interference testing
+· Phase 5: Edge cases (long tasks, large data, rapid switching)
+- Add a "Task Coverage" metric alongside screen coverage
+- The agent should ask: "What would the user do NEXT?" at every step,
+and only stop when the goal is reached or clearly blocked
+
+### 5. Scoring Model
+- Add task-level scoring with phase weighting:
+· Later phases (refinement, finalization) get higher weight
+  because user investment is greater and failure cost is higher
+· A task that fails at the last step should score LOWER than
+  one that fails at the first step (sunk cost principle)
+- Add task completion rate as a top-level metric
+
+### 6. Reporting
+- Add a "Task Journey" section to reports that shows the full
+task timeline with per-phase verdicts
+- Include "Human Impact Statements" that describe the user's
+experience across the entire task, not just individual actions
+
+### 7. Anti-Pattern Detection
+- The agent should detect and flag when testing falls into
+feature-unit traps:
+· Dead-end screens with no forward path
+· Orphan features disconnected from any task
+· Premature "pass" verdicts after a single action
+· Missing "final mile" (last step of a task is broken)
+
+## Constraints
+
+- Do NOT remove or weaken existing action-level oracles — they
+remain the foundation
+- Task-level evaluation is an ADDITIONAL layer that uses
+action-level verdicts as building blocks
+- Keep the spec format consistent with the existing document
+- All new content must maintain the "AI agent + timing device"
+architecture assumption
+- Write in the same language as the existing document sections
+(Korean for Korean sections, English for English sections)
+
+## Multi-Modal Task Awareness
+
+Many modern apps combine AI and GUI interactions. The spec must
+account for these patterns:
+
+| Pattern | Description |
+|---|---|
+| AI-then-GUI | Prompt AI → get output → manually refine in GUI |
+| GUI-then-AI | Create manually → use AI to enhance/polish |
+| Interleaved | Alternate between AI prompts and manual edits |
+| Pure GUI | Traditional click/type interaction only |
+| Pure AI | AI does everything, user only reviews |
+
+The oracle must verify that transitions BETWEEN these modes are
+seamless and that user work is NEVER lost when switching modes.
+
+## Output
+
+Produce the updated specification as a single Markdown document,
+preserving all existing sections and integrating the new
+task-oriented content naturally. Mark new or significantly
+changed sections with a "(Updated)" or "(New)" tag.
+
 ---
 
 # 3. Oracle Categories
@@ -949,3 +1345,4 @@ Week 5+: + Accessibility + Gesture + Platform Convention + ...
 ---
 
 # END
+```
